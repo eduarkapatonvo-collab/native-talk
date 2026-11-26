@@ -1,0 +1,41 @@
+name: Compilar APK
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Descomprimir el proyecto
+        run: |
+          Z=$(ls *.zip | head -1)
+          unzip -q -o "$Z" -d src
+          P=$(dirname "$(find src -name settings.gradle | head -1)")
+          echo "PROJ=$P" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Compilar
+        run: gradle -p "$PROJ" :app:assembleDebug --no-daemon
+
+      - name: Publicar el APK
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp "$PROJ/app/build/outputs/apk/debug/app-debug.apk" NativeTalk.apk
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest NativeTalk.apk --title "Native Talk" --notes "Descarga NativeTalk.apk en tu Android e instálalo."
